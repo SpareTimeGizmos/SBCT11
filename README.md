@@ -1,5 +1,7 @@
 # SBCT11 PDP-11/DCT11 Single Board Computer
 
+![SBCT11 being debugged](images/"SBCT11 Debugging.jpg")
+
 The Spare Time Gizmos SBCT11 is a PDP-11 compatible single board computer based on the DEC DCT11 microprocessor.  The DCT11 is a 16 bit microprocessor that executes the standard PDP-11/LSI-11 instruction set and is roughly the speed of a PDP-11/34.  The SBCT11 itself measures 10" by 4.5" and features:
 
 * 16 bit wide data and address busses
