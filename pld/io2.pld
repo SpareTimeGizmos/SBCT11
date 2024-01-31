@@ -1,0 +1,126 @@
+/*++                                                                    */
+/* io2.pld - Spare Time Gizmos SBCT11 I/O Decoding GAL #2               */
+/*                                                                      */
+/*   Copyright (C) 2021 by Robert Armstrong, Milpitas, California.      */
+/*                                                                      */
+/*  This program is free software; you can redistribute it and/or       */
+/* modify it under the terms of the GNU General Public License as       */
+/* published by the Free Software Foundation; either version 2 of the   */
+/* License, or (at your option) any later version.                      */
+/*                                                                      */
+/*  This program is distributed in the hope that it will be useful, but */
+/* WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU    */
+/* General Public License for more details.                             */
+/*                                                                      */
+/*   You should have received a copy of the GNU General Public License  */
+/* along with this program; if not, write to the Free Software          */
+/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.  */
+/*                                                                      */
+/* DESCRIPTION								*/
+/*   I/O GAL #2 contains additional random logic required to implement	*/
+/* the SBCT11 IDE, PPI and RTC/NVR I/O devices.  All of this could be	*/
+/* implemented in a few 74HC parts, but	this GAL does it all in one	*/
+/* package.  Plus, there's still a few pins left over for more!		*/
+/*									*/
+/*   On the SBCT11 the IDE/ATA interface is allocated a total of 64	*/
+/* bytes or 32 words.  The interface itself has eight registers and all	*/
+/* of them are 8 bits wide EXCEPT for the data register which is a full	*/
+/* 16 bits.  On the SBCT11 all registers are mapped to even addresses	*/
+/* and LAL0 is ignored.  The most significant byte of any register	*/
+/* except the data register is undefined.  ATA doesn't support byte	*/
+/* operations, however byte access to the even addresses should work as	*/
+/* expected with the exception of the data register.  The problem with	*/
+/* the latter is that reading it changes the data, so reading the low	*/
+/* order byte will corrupt the high byte.    	      	      	  	*/
+/*									*/
+/*   LAL5 selects write only (LAL5=1) or read/write (LAL5=0). The DCT11	*/
+/* insists on reading every memory location before writing it, even for	*/
+/* operations where the current memory contens are irrelevant.  This	*/
+/* gratituous read can cause problems for ATA, for example when writing	*/
+/* the command register the status register would implicitly be read.	*/
+/* Reading the status register has side effects, and this behavior is	*/
+/* problematic.  So any operation with LAL5=1 will suppress the DIOR	*/
+/* signal.  The CPU will get garbage, which it presumably doesn't care	*/
+/* about, and only the write will take place.  		  	  	*/
+/*									*/
+/*	176400..176417	IDE CS3FX space (R/W)				*/
+/*	176420..176437	IDE CS1FX space (R/W)				*/
+/*	176440..176457	IDE CS3FX space (write only)			*/
+/*	176460..176477	IDE CS1FX space (write only)			*/
+/*									*/
+/* Notice that LAL4 and LAL3, 2 and 1 are not handled by this GAL, but	*/
+/* are generated directly by the IDE buffers on the SBCT11.		*/
+/*									*/
+/*   The 82C55 programmable parallel interface (aka PPI) mostly needs	*/
+/* only a chip select signal, and that's decoded by IOGAL#1.  This GAL	*/
+/* helps be generating a PPI RD signal which is active only when LAL3	*/
+/* is NOT asserted.  This creates separate R/W and write only address	*/
+/* spaces for the PPI -							*/
+/*									*/
+/*	177420..177427	PPI (R/W)					*/
+/*	177430..177437	PPI (write only)				*/
+/*									*/
+/*   The DS12887 RTC and NVR chip is a bit of an odd device.  It holds	*/
+/* 128 bytes of RAM (some of which contain the current time of day) and	*/
+/* thus requires 7 address bits. It uses a multiplexed address and data	*/
+/* bus with a separate address strobe input as well as the usual WRITE	*/
+/* and READ (or OUTPUT ENABLE) inputs.  It also has a chip select, but	*/
+/* in the SBCT11 the latter is permanently tied active and we control	*/
+/* the chip via the AS, WR and OE inputs. Like the PPI and the IDE, the	*/
+/* DS12887 requires separate read/write and write only addresses for 	*/
+/* the data port to avoid the DCT11 "always read before write" problem.	*/
+/*									*/
+/*	177460	NVR/RTC read data					*/
+/*	177462	NVR/RTC write data					*/
+/*	177466	NVR/RTC load address					*/
+/*									*/
+/* REVISION HISTORY                                                     */
+/* 28-APR-21    RLA     New file.                                       */
+/* 31-MAY-21	RLA	Add DS12887 RTC/NVR				*/
+/*--                                                                    */
+NAME            IO2;
+PARTNO          IO2;
+REVISION        B;
+DATE            05/31/21;
+DESIGNER        Robert Armstrong;
+COMPANY         Spare Time Gizmos;
+ASSEMBLY        SBCT11;
+LOCATION        U31;
+DEVICE          G16V8;
+
+/* INPUTS... */
+Pin  2 = !WHB;		/* high byte write strobe			*/
+Pin  1 = !WLB;		/* low   "     "      "				*/
+Pin 11 = !READ;		/* memory read strobe				*/
+Pin  3 = !CS_IDE;	/* the IDE/ATA drive is selected		*/
+Pin  4 = !CS_RTC;	/* DS12887 NVR/RTC is selected			*/
+Pin  6 = LAL5;		/* latched address bit #5			*/
+Pin  7 = LAL3;		/*    "       "     "  #3			*/
+Pin  8 = LAL2;		/*    "       "     "  #2			*/
+Pin  9 = LAL1;		/*    "       "     "  #1			*/
+/* Pin 5 unused */
+
+/* OUTPUTS... */
+Pin 19 = !IDE_ENABLE;	/* enable the IDE bus buffers			*/
+Pin 18 =  IDE_RD;	/* assert IDE DIOR (read IDE register)		*/
+Pin 17 =  IDE_WR;	/* assert IDE DIOW (write IDE register)		*/
+Pin 14 = !PPI_RD;       /* assert the PPI RD input			*/
+Pin 12 =  RTC_AS;	/* DS12887 address strobe			*/
+Pin 13 = !RTC_WR;	/*    "    write      "				*/
+Pin 15 = !RTC_OE;	/*    "    read       "				*/
+/* Pin 16 unused */
+
+
+/* IDE decoding ... */
+IDE_ENABLE = CS_IDE & (READ # WHB # WLB);
+IDE_RD = CS_IDE & READ & !LAL5;
+IDE_WR = CS_IDE & (WHB # WLB);
+
+/* 82C55 PPI decoding ... */
+PPI_RD = READ & !LAL3;
+
+/* DS12887 decoding ... */
+RTC_OE = CS_RTC & !LAL2 & !LAL1 &  READ;
+RTC_WR = CS_RTC & !LAL2 &  LAL1 & (WHB # WLB);
+RTC_AS = CS_RTC &  LAL2 &  LAL1 & (WHB # WLB);

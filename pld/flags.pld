@@ -1,0 +1,221 @@
+/*++                                                                    */
+/* flags.pld - Spare Time Gizmos SBCT11 FLAGS GAL                       */
+/*                                                                      */
+/*   Copyright (C) 2021 by Robert Armstrong, Milpitas, California.      */
+/*                                                                      */
+/*  This program is free software; you can redistribute it and/or       */
+/* modify it under the terms of the GNU General Public License as       */
+/* published by the Free Software Foundation; either version 2 of the   */
+/* License, or (at your option) any later version.                      */
+/*                                                                      */
+/*  This program is distributed in the hope that it will be useful, but */
+/* WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU    */
+/* General Public License for more details.                             */
+/*                                                                      */
+/*   You should have received a copy of the GNU General Public License  */
+/* along with this program; if not, write to the Free Software          */
+/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.  */
+/* 	       	     	       	      	    	 	    	  	*/
+/* DESCRIPTION								*/
+/*   The FLAGS GAL implements four single bit "flag" registers.  One of	*/
+/* these registers is compatible with the LTCS (line time clock control	*/
+/* and status) register implemented by the DEC KPV11, MXV11, or BDV11	*/
+/* modules.  This register and flag bit controls the LTC function in	*/
+/* the SBCT11.								*/
+/*									*/
+/*  The other three flag registers are similar to the LTCS. Two of them	*/
+/* control the RAM ENABLE flag and the NXM TRAP ENABLE flag, and the	*/
+/* third register and flag bit combination is currently unused. The NXM	*/
+/* TRAP flag is functionally exactly the same as the LTCS and the RAM	*/
+/* ENABLE is a simplified subset.    	      	     	      	  	*/
+/* 	       		  						*/
+/*	ADDRESS	REGISTER						*/
+/*	------- ----------------------------------------------		*/
+/*	177540	MEMC (memory control register/RAM ENABLE flag)		*/
+/*	177542	NXMCS (NXM trapping control/status register)		*/
+/*	177544	unused spare flag and sense				*/
+/*	177546	LTCS (line time clock control/status register)		*/
+/*									*/
+/* MEMC REGISTER							*/
+/* -------------							*/
+/*									*/
+/* BIT 15  14  13  12  11  10  9   8   7   6   5   4   3   2   1   0	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*   |   |   |   |   |   |   |   |   |   |RAM|   |   |   |   |   |   |	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*			    MEMC REGISTER (177540)			*/
+/*									*/
+/*   The memory control (MEMC) register at address 177540 controls the	*/
+/* state of the RAM ENABLE signal.  When set, the RAM bit asserts RAM	*/
+/* ENABLE and maps RAM to most of the address space.  When cleared, the	*/
+/* RAM bit deasserts RAM ENABLE and maps EPROM to most of the address	*/
+/* space.  Refer to the MEMORY GAL description for more details.  This	*/
+/* register is read/write and it is possible to read back the current	*/
+/* state of the RAM bit.						*/
+/*									*/
+/*  The RAM bit and RAM ENABLE are cleared on power up, but NOT BY BCLR	*/
+/* (i.e. the RESET instruction does NOT change the memory mapping!).	*/
+/*									*/
+/* NXMCS REGISTER							*/
+/* --------------							*/
+/*									*/
+/* BIT 15  14  13  12  11  10  9   8   7   6   5   4   3   2   1   0	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*   |   |   |   |   |   |   |   |   |NXM|NXE|   |   |   |   |   |   |	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*			  NXMCS REGISTER (177542)			*/
+/*									*/
+/*   The NXMCS register controls the non-existent memory trap and bus	*/
+/* timeout emulation feature. This is unique to the SBCT11. NXM trapping*/
+/* is enabled by writing a 1 to the NXE bit, and disabled by writing a	*/
+/* zero to this bit.  If the NXE bit is set and the program references	*/
+/* a "non-existent" memory address (see the MEMORY and IO GALs for a	*/
+/* discussion of what that might mean) then the NXM flip flop will be	*/
+/* set. The NXM bit will cause an immediate trap to the restart address	*/
+/* after the completion of the current instruction. 			*/
+/*									*/
+/*  The NXE bit can be read or written, but the NXM bit is read only.	*/
+/* Once set, the program MUST EXPLICITLY CLEAR the NXM bit by writing a	*/
+/* 0 to NXE and then (if desired) writing it with a 1 again.  Note that	*/
+/* the NXM flip flop will never set as long as the NXE bit is cleared.	*/
+/*									*/
+/*  The NXE bit is cleared on power up, but NOT BY BCLR (i.e. the PDP11	*/
+/* RESET instruction does NOT disable bus timeout emulation!).	  	*/
+/*									*/
+/* SPARE FLAG REGISTER							*/
+/* -------------------							*/
+/*									*/
+/* BIT 15  14  13  12  11  10  9   8   7   6   5   4   3   2   1   0	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*   |   |   |   |   |   |   |   |   |SNS|FLG|   |   |   |   |   |   |	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*		     SPARE FLAG REGISTER (177544)			*/
+/*									*/
+/*  This register contains a spare flag bit and a spare sense bit which	*/
+/* are currently unused in the SBCT11.  The FLG bit is read/write and 	*/
+/* will be cleared by BCLR, and the SNS input is read only.  Both the	*/
+/* SNS input and FLG output are available on pins of the FLAGS GAL.	*/
+/*									*/
+/* LTCS REGISTER							*/
+/* -------------							*/
+/*									*/
+/* BIT 15  14  13  12  11  10  9   8   7   6   5   4   3   2   1   0	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*   |   |   |   |   |   |   |   |   |LTS|LTE|   |   |   |   |   |   |	*/
+/*   +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+	*/
+/*			 LTCS REGISTER (177546)				*/
+/*			      	       					*/
+/*  The LTCS register contains two bits - LTE (bit 6) is the line time	*/
+/* clock interrupt enable flag, and LTS (bit 7) is the current status 	*/
+/* of the clock flip flop.  The interrupt enable bit may be set or	*/
+/* cleared by writing a 1 or 0 to bit 6 of address 177546. The interrupt*/
+/* enable flag may be read back, along with the current state of the	*/
+/* LTC flip flop, by reading address 177546.  The LTS flag is read only	*/
+/* and cannot be written. The other bits in this register are undefined	*/
+/* and should be ignored.     	    	    	 	      		*/
+/*									*/
+/*  Note that reading this register WILL CLEAR the LTS flag, even with-	*/
+/* out an LTC interrupt acknowledge cycle.  Also note that the LTS bit	*/
+/* WILL NOT TOGGLE unless the LTE bit is also set. You can always avoid	*/
+/* LTC interrupts by raising the processor priority to level 7. The LTE	*/
+/* bit is cleared at power up and by BCLR. 	       	     	    	*/
+/*									*/
+/*   This implementation is a superset of the DEC BDV11 and MXV11	*/
+/* implementation (which implement only the LTE bit, and that as write	*/
+/* only) and a variation of the KPV11.	    	     	      	 	*/
+/*                                                                      */
+/* REVISION HISTORY                                                     */
+/* 27-APR-21    RLA     New file.                                       */
+/*--                                                                    */
+NAME            FLAGS;
+PARTNO          FLAGAL;
+REVISION        A;
+DATE            04/27/21;
+DESIGNER        Robert Armstrong;
+COMPANY         Spare Time Gizmos;
+ASSEMBLY        SBCT11;
+LOCATION        U30;
+DEVICE          G16V8;
+                                                    
+/* INPUTS... */
+Pin  8 = !CS_FLAGS;	/* any flag register selected			*/
+Pin  1 = !WRITE;	/* write flags (clock!)				*/
+Pin 11 = !READ;		/* read flags (output enable)			*/
+Pin  9 = !BCLR;		/* bus clear (RESET instruction)		*/
+Pin  3 = !PUP;		/* power up (hard reset)			*/
+Pin  7 =  LAL1;		/* address bit 1				*/
+Pin  6 =  LAL2;		/* address bit 2				*/
+Pin  2 =  LTC_IRQ;	/* LTC flag bit	  				*/
+Pin  5 =  NXM_TRAP;	/* NXM flag bit					*/
+Pin  4 = !SPARE_SENSE;	/* spare sense input				*/
+Field LAL = [LAL2, LAL1];
+
+/* OUTPUTS... */
+Pin 15 = RAM_ENABLE;	/* RAM ENABLE flag bit from MEMC		*/
+Pin 13 = NXM_ENABLE;	/* NXM TRAP ENABLE flag but from NXMCS		*/
+Pin 17 = DAL7;		/* data bus bit 6				*/
+Pin 18 = DAL6;		/* data bus bit 7				*/
+Pin 14 = LTC_ENABLE;	/* LTC ENABLE flag bit from LTCS 		*/
+Pin 16 = SPARE_FLAG;	/* spare flag output				*/
+/* Pins 12, 19 unused */
+
+/* Select addresses for the internal registers ... */
+$define MEMC	'b'00x	/* MEMC  register 177540			*/
+$define NXMCS	'b'01x	/* NXMCS register 177542			*/
+$define SPRCS	'b'10x	/* SPARE register 177544			*/
+$define LTCS	'b'11x	/* LTCS  register 177546			*/
+
+/*   This builds a simple SR latch for the RAM_ENABLE signal.  When the	*/
+/* MEMLE latch enable is true the latch is loaded from DAL6, and when	*/
+/* MEMLE is false then RAM_ENABLE holds its last state.  PUP serves as	*/
+/* an asynchronous reset that clears RAM_ENABLE regardless of MEMLE or	*/
+/* or the current RAM_ENABLE state. BTW, note that the extra term makes	*/
+/* this a glitchless latch - that's probably not necessary in this case	*/
+/* but we have plenty of product terms to go around ...	      	   	*/
+MEMLE = WRITE & CS_FLAGS & LAL:MEMC;
+RAM_ENABLE = (DAL6       &  MEMLE      & !PUP)
+           # (RAM_ENABLE & !MEMLE      & !PUP)
+           # (DAL6       &  RAM_ENABLE & !PUP);
+RAM_ENABLE.oe = 'b'1;
+
+/* The logic for the NXM_ENABLE latch is pretty much the same ... */
+NXMLE = WRITE & CS_FLAGS & LAL:NXMCS;
+NXM_ENABLE = (DAL6       &  NXMLE      & !PUP)
+           # (NXM_ENABLE & !NXMLE      & !PUP)
+           # (DAL6       &  NXM_ENABLE & !PUP);
+NXM_ENABLE.oe = 'b'1;
+
+/* LTC_ENABLE is also the same, EXCEPT this one is reset by BCLR! */
+LTCLE = WRITE & CS_FLAGS & LAL:LTCS;
+LTC_ENABLE = (DAL6       &  LTCLE      & !BCLR)
+           # (LTC_ENABLE & !LTCLE      & !BCLR)
+           # (DAL6       &  LTC_ENABLE & !BCLR);
+LTC_ENABLE.oe = 'b'1;
+
+/* And lastly, the spare register - no surprises here ... */
+SPRLE = WRITE & CS_FLAGS & LAL:SPRCS;
+SPARE_FLAG = (DAL6       &  SPRLE      & !BCLR)
+           # (SPARE_FLAG & !SPRLE      & !BCLR)
+           # (DAL6       &  SPARE_FLAG & !BCLR);
+SPARE_FLAG.oe = 'b'1;
+
+/*   When reading, DAL6 returns the current state of the selected flag	*/
+/* bit.  The logic just multiplexes the correct bit to the output; the	*/
+/* output tristate buffer is enabled by the READ signal.   	   	*/
+DAL6 = (RAM_ENABLE & LAL:MEMC)
+     # (NXM_ENABLE & LAL:NXMCS)
+     # (LTC_ENABLE & LAL:LTCS)
+     # (SPARE_FLAG & LAL:SPRCS);
+DAL6.oe = CS_FLAGS & READ;
+
+/*   And when reading, DAL7 reports the state of the associated status	*/
+/* flag. Note that the memory control/RAM_ENABLE register has no status	*/
+/* bit, so in that case we always report the complement of the current	*/
+/* RAM_ENABLE state.  There's no particular need for that, but it gives	*/
+/* the software a trivial test to see if this GAL is working.  	  	*/
+DAL7 = (!RAM_ENABLE & LAL:MEMC)
+     # (NXM_TRAP    & LAL:NXMCS)
+     # (LTC_IRQ     & LAL:LTCS)
+     # (SPARE_SENSE & LAL:SPRCS);
+DAL7.oe = CS_FLAGS & READ;

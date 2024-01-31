@@ -1,0 +1,164 @@
+/*++                                                                    */
+/* memory.pld - Spare Time Gizmos SBCT11 Memory Address Decoding GAL    */
+/*                                                                      */
+/*   Copyright (C) 2021 by Robert Armstrong, Milpitas, California.      */
+/*                                                                      */
+/*  This program is free software; you can redistribute it and/or       */
+/* modify it under the terms of the GNU General Public License as       */
+/* published by the Free Software Foundation; either version 2 of the   */
+/* License, or (at your option) any later version.                      */
+/*                                                                      */
+/*  This program is distributed in the hope that it will be useful, but */
+/* WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU    */
+/* General Public License for more details.                             */
+/*                                                                      */
+/*   You should have received a copy of the GNU General Public License  */
+/* along with this program; if not, write to the Free Software          */
+/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.  */
+/*                                                                      */
+/* DESCRIPTION								*/
+/*  This GAL decodes the upper 8 bits of the memory address and selects	*/
+/* RAM, ROM, the RTC/NVP chip, or one of two I/O pages according to the	*/
+/* following memory map -      	      	     	       		    	*/
+/*									*/
+/*	ADDRESS RANGE	RAM MAP	ROM MAP	    SIZE			*/
+/*	--------------	-------	-------	---------			*/
+/*	000000..001777	RAM	RAM	 1K bytes			*/
+/*	001000..167777	RAM	EPROM	59K bytes			*/
+/*	170000..175777	EPROM	EPROM	 3K bytes			*/
+/*	176000..176377	RAM	RAM	256 bytes  SCRATCH PAD RAM	*/
+/*	176400..176777	  IOPAGE	256 bytes  	       		*/
+/*	177000..177377	  unused	256 bytes  			*/
+/*	177400..177777	  IOPAGE	256 bytes  	    		*/
+/*			  		    				*/
+/*  RAM is always mapped for the low 1K bytes of the address space, and	*/
+/* EPROM is always mapped into the 3K space from 170000 to 175777. Only	*/
+/* the huge 59K byte chunk in the middle, from 001000 to 167777, is	*/
+/* affected by the RAM ENABLE input.  Addresses from 176000 to 176377	*/
+/* also enable the same RAM chips as all the rest of memory, however	*/
+/* this 256 byte chunk is reserved for the EPROM monitor as scratch pad	*/
+/* storage.								*/
+/*									*/
+/*  The IOPAGE output is an input to the I/O GAL and that device uses	*/
+/* them, along with more address bits, to decode the I/O addresses for	*/
+/* SLU0, SLU1, the PPI, the IDE drive, and any spare I/O devices. This	*/
+/* means all I/O devices on the SBCT11 must fall into the address range	*/
+/* 176400 to 176777, or 177400 thru 177777.  Happily, the only devices	*/
+/* where we really care about specific addresses are SLU0 and SLU1, and	*/
+/* the standard PDP11 addresses (17756x for SLU0, and 17650x for SLU1)	*/
+/* fall in those ranges.	   	       				*/
+/*									*/
+/*  Lastly, the NXM1 output is asserted for any memory address in the	*/
+/* range 170000 to 170377.  This is the first chunk of address space	*/
+/* right above the end of usable RAM, and the NXM1 output is used to	*/
+/* generate bus timeout traps (or rather the emulation there of). This	*/
+/* satisfies most PDP11 software that tries to size memory by scanning	*/
+/* upwards until it encounters a timeout trap.  Likewise, NXM1 will be	*/
+/* asserted for addresses in the scratchpad RAM range.  Since this is	*/
+/* not a standard PDP11 I/O device we pretend (at least for standard	*/
+/* PDP11 software) that there's nothing there.				*/
+/*									*/
+/*  NXM1 is NOT, however, asserted for any address in the IOPAGE range.	*/
+/* Some devices do exist there, like the SLUs, and we don't want to	*/
+/* trap when they're accessed. The IO GAL handles generating its own	*/
+/* signal, NXM2, for any unused I/O addresses.	     		    	*/
+/*									*/
+/*  It's worth mentioning that NXM1 (and NXM2 from the I/O GAL) are 	*/
+/* implemented as open drain, wire-OR signals.  Strictly speaking this	*/
+/* GAL doesn't have open drain outputs, but we can cheat by using the	*/
+/* tristate output driver that it does have.  The actual NXM1 signal is	*/
+/* hardwired low, and we use the calculated NXM1 value to enable the 	*/
+/* output driver.  This is tricky since the output enable only allows	*/
+/* one product term and we need more than that, but we have a spare	*/
+/* output pin that we can use to compute the NXM signal.      		*/
+/*									*/
+/* REVISION HISTORY                                                     */
+/* 28-APR-21    RLA     New file for revision B PCBs.			*/
+/* 31-MAY-21	RLA	Remove the DS12887 range.			*/
+/*--                                                                    */
+NAME            MEMORY;
+PARTNO          MEMORY;
+REVISION        B;
+DATE            04/28/21;
+DESIGNER        Robert Armstrong;
+COMPANY         Spare Time Gizmos;
+ASSEMBLY        SBCT11;
+LOCATION        U11;
+DEVICE          G16V8;
+
+/* INPUTS... */
+/*   Pin assignments have been selected to optimize the PCB layout, so	*/
+/* they're not in any kind of reasonable order.  Sorry about that!  	*/
+Pin  1 = RAM_ENABLE;	/* magic memory mapping flag bit		*/
+Pin  6 = LAL15;		/* most significant address bit			*/
+Pin  2 = LAL14;		/* address bits 14  	    			*/
+Pin  7 = LAL13;		/* address bits 13  	    			*/
+Pin  5 = LAL12;		/* address bits 12  	    			*/
+Pin  9 = LAL11;		/* address bits 11  	    			*/
+Pin  4 = LAL10;		/* address bits 10  	    			*/
+Pin  3 = LAL9;		/* address bits 9  	    			*/
+Pin  8 = LAL8;		/* address bits 8  	    			*/
+/* Pin 11 unused */
+
+/* OUTPUTS... */
+Pin 18 = !CS_RAM;	/* -CE for 62256 SRAM chips             	*/
+Pin 17 = !CS_EPROM;     /*  "   "  27C256 EPROM  "              	*/
+Pin 16 =  IOPAGE;       /* I/O selection input to I/O GAL #1		*/
+Pin 14 = !CS_RTC;       /* DS12887A RTC/NVR chip enable	  		*/
+Pin 13 =  NXM1;		/* bus timeout emulation output			*/
+/* Pins 12, 15, 19 unused */
+
+/*   Define a field for the address bits.  REMEMBER - CUPL will always	*/
+/* make this a 16 bit field even though we only have the upper 8 bits.	*/
+/* Be sure to use "don't care's" for the lower 8 bits!	       	 	*/
+FIELD LAL = [LAL15..8];
+
+/* Select some serious minimization! */
+MIN CS_RAM   = 4;
+MIN CS_EPROM = 4;
+MIN NXM1     = 4;
+
+/* TEMPORARY!!  FIX ME!!!*/
+CS_RTC = 'b'1;
+
+CONDITION {
+  /* RAM selection... */
+  /*   When RAM_ENABLE is true, RAM is enabled for all of memory from	*/
+  /* 000000 to 0167777. However when RAM_ENABLE is false, RAM s enabled	*/
+  /* only from 000000 to 001777 and everything else in that space is	*/
+  /* EPROM.  And regardless of RAM_ENABLE, there's a slice of 128 words	*/
+  /* of RAM from 17600 to 17677 that's always enabled - this is used by	*/
+  /* the monitor code for scratchpad space.				*/
+  /*   BTW, notice that the scratch pad RAM size is very conveniently	*/
+  /* exactly 256 bytes, and we only decode the upper 8 address bits.	*/
+  /* That means we can just ignore the lower 8 bits!			*/
+  IF  LAL:['o'176000..'o'176377]
+   #  LAL:['o'000000..'o'001777]
+   # (LAL:['o'002000..'o'167777] & RAM_ENABLE) OUT CS_RAM;
+
+  /* ROM selection... */
+  /*   When RAM_ENABLE is true, EPROM is enabled only from addresses	*/
+  /* 170000 to 175777. That's 3K bytes or 1.5K words.  However, when	*/
+  /* RAM_ENABLE is false then EPROM is enabled all the way from 002000	*/
+  /* to 175777, fod a whopping 62K bytes of usable space.  		*/
+  IF  LAL:['o'170000..'o'175777]
+   # (LAL:['o'002000..'o'167777] & !RAM_ENABLE) OUT CS_EPROM;
+
+  /* RTC/NVR selection */
+  /*IF LAL:['o'177000..'o'177377] OUT CS_RTC;*/
+
+  /* IOPAGE */
+  IF LAL:['o'176400..'o'176777]
+   # LAL:['o'177400..'o'177777] OUT IOPAGE;
+
+  /* NXM1 */
+  /*  Lastly, NXM1 is asserted for 256 bytes (that's the smallest chunk	*/
+  /* of address space we can decode!) right after the top of RAM (in	*/
+  /* RAM_ENABLE mode, of course).  It's also asserted for any address 	*/
+  /* in the scratchpad area, but NOT for any other address in the EPROM	*/
+  /* space nor for any IOPAGE address.	     				*/
+  IF LAL:['o'170000..'o'170377]
+   # LAL:['o'176000..'o'176377]
+   # LAL:['o'177000..'o'177377] OUT NXM1;
+}

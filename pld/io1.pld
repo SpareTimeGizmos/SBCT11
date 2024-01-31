@@ -1,0 +1,118 @@
+/*++                                                                    */
+/* io1.pld - Spare Time Gizmos SBCT11 I/O Address Decoding GAL #1       */
+/*                                                                      */
+/*   Copyright (C) 2021 by Robert Armstrong, Milpitas, California.      */
+/*                                                                      */
+/*  This program is free software; you can redistribute it and/or       */
+/* modify it under the terms of the GNU General Public License as       */
+/* published by the Free Software Foundation; either version 2 of the   */
+/* License, or (at your option) any later version.                      */
+/*                                                                      */
+/*  This program is distributed in the hope that it will be useful, but */
+/* WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU    */
+/* General Public License for more details.                             */
+/*                                                                      */
+/*   You should have received a copy of the GNU General Public License  */
+/* along with this program; if not, write to the Free Software          */
+/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.  */
+/*                                                                      */
+/* DESCRIPTION								*/
+/*   I/O GAL #1 decodes all I/O addresses with 8 bytes of resolution.	*/
+/* It doesn't decode the lower three address bits (hence the 8 bytes of	*/
+/* resolution) and those are left to the I/O device.  This GAL decodes	*/
+/* a chip select signal for some devices (e.g. PPI, SLUs) but for other	*/
+/* devices it decodes a read, write or both strobe directly (e.g. IDE	*/
+/* or PPI).   	      	      	       	    	   	    	  	*/
+/*									*/
+/*   This GAL receives an IOPAGE signal from the MEMORY GAL, which is	*/
+/* asserted for any address from 176400 to 176777 OR from 177400 to	*/
+/* 177777. This GAL decodes LAL9 to determine which of those two spaces	*/
+/* is active, as well as LAL7 thru LAL3 to select the following I/O	*/
+/* devices -     					     	     	*/
+/*									*/
+/*    IOPAGE #1								*/
+/*	176400..176477	IDE address space				*/
+/*	176500..176507	SLU1 (TU58)					*/
+/*	176560..176577	SPARE I/O					*/
+/*									*/
+/*    IOPAGE #2								*/
+/*	177420..177437	PPI						*/
+/*	177460..177467	RTC/NVR						*/
+/*	177540..177547	Flag registers (see FLAGS GAL)			*/
+/*	177560..177567	SLU0 (console)					*/
+/*									*/
+/* REVISION HISTORY                                                     */
+/* 28-APR-21    RLA     New file.                                       */
+/*  1-JUN-21	RLA	Add DS12887 decoding.  Change PPI address	*/
+/*--                                                                    */
+NAME            IO1;
+PARTNO          IO1;
+REVISION        B;
+DATE            06/01/21;
+DESIGNER        Robert Armstrong;
+COMPANY         Spare Time Gizmos;
+ASSEMBLY        SBCT11;
+LOCATION        U29;
+DEVICE          G16V8;
+
+/* INPUTS... */
+Pin  1 = IOPAGE;	/* I/O page address (from MEMORY GAL)		*/
+Pin  2 = LAL9;		/* selects 1764xx or 1774xx space		*/
+Pin  3 = LAL7;		/* device select address bit 7			*/
+Pin  4 = LAL6;		/*   "      "     "   "   "  6			*/
+Pin  5 = LAL5;		/*   "      "     "   "   "  5			*/
+Pin  6 = LAL4;		/*   "      "     "   "   "  4			*/
+Pin  7 = LAL3;		/*   "      "     "   "   "  3			*/
+/* Pins 8, 9, 11 unused */
+
+/* OUTPUTS... */
+Pin 14 = !CS_FLAGS;	/* select the FLAGAL flags register		*/
+Pin 13 = !CS_SPARE;	/* spare select to the expansion connector	*/
+Pin 17 = !CS_IDE;	/* select the IDE/ATA disk			*/
+Pin 16 = !CS_PPI;	/*   "     "  82C55 parallel port		*/
+Pin 15 = !CS_RTC;	/*   "     "  DS12887 NVR/RTC chip		*/
+Pin 18 = !CS_SLU0;	/* select the console DLART 			*/
+Pin 19 = !CS_SLU1;	/*   "     "  TU58      "			*/
+Pin 12 =  NXM2;		/* non-existent I/O device selected		*/
+
+/*   Fake up a bit field for the address.  This is tricky because CUPL	*/
+/* insists that there is a 1:1 relation between the signal name and the	*/
+/* bit position (e.g. LAL9 is bit 9, LAL7 is bit 7, etc).  Nothing you	*/
+/* do in the specification of the field will change this!  The trick we	*/
+/* use here is to fake up the missing address bits so that a complete	*/
+/* 13 bit field (we're missing the lower 3 bits) exists.  For all its	*/
+/* problems, CUPL _is_ smart enough to figure out that some of these 	*/
+/* bits are constants and it won't try to generate logic for them.	*/
+LAL15 = 'b'1;  LAL14 = 'b'1;  LAL13 = 'b'1;  LAL12 = 'b'1;
+LAL11 = 'b'1;  LAL10 = 'b'1;  /* LAL9 exists! */ LAL8 = 'b'1;
+FIELD LAL = [LAL15..3];
+
+/* For convenience, these are all the magic select addresses ... */
+$define SELECT_SLU0	 'o'17756x
+$define SELECT_SLU1	 'o'17650x
+$define SELECT_PPI	['o'177420..'o'177437]
+$define SELECT_RTC	['o'177460..'o'177467]
+$define SELECT_IDE	['o'176400..'o'176477]
+$define SELECT_FLAGS	 'o'17754x
+$define SELECT_SPARE	['o'176560..'o'176577]
+
+/* After all that, the rest is easy! */
+CONDITION {
+  IF IOPAGE & LAL:SELECT_SLU0  OUT CS_SLU0;
+  IF IOPAGE & LAL:SELECT_SLU1  OUT CS_SLU1;
+  IF IOPAGE & LAL:SELECT_PPI   OUT CS_PPI;
+  IF IOPAGE & LAL:SELECT_RTC   OUT CS_RTC;
+  IF IOPAGE & LAL:SELECT_IDE   OUT CS_IDE;
+  IF IOPAGE & LAL:SELECT_FLAGS OUT CS_FLAGS;
+  IF IOPAGE & LAL:SELECT_SPARE OUT CS_SPARE;
+}
+
+/*   The NXM output is enabled for any IOPAGE address that does not	*/
+/* select a device.  When enabled, NXM traps to the HALT (restart) ROM	*/
+/* address and the monitor code in turn simulates a bus timeout trap to	*/
+/* 4.  Note that the NXM does not in any way affect the regular address	*/
+/* decoding, and any peripheral address or device is still selected! 	*/
+MIN NXM2 = 4;
+NXM2 =  IOPAGE & !(LAL:SELECT_SLU0 # LAL:SELECT_SLU1 # LAL:SELECT_PPI
+		 # LAL:SELECT_IDE # LAL:SELECT_FLAGS # LAL:SELECT_SPARE);

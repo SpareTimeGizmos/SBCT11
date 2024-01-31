@@ -1,0 +1,135 @@
+/*++									*/
+/* acknowledge.pld - Spare Time Gizmos SBCT11 Interrupt Acknowledge GAL	*/
+/*									*/
+/*   Copyright (C) 2021 by Robert Armstrong, Milpitas, California.	*/
+/*									*/
+/*  This program is free software; you can redistribute it and/or	*/
+/* modify it under the terms of the GNU General Public License as	*/
+/* published by the Free Software Foundation; either version 2 of the	*/
+/* License, or (at your option) any later version.			*/
+/*									*/
+/*  This program is distributed in the hope that it will be useful, but	*/
+/* WITHOUT ANY WARRANTY; without even the implied warranty of		*/
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU	*/
+/* General Public License for more details.				*/
+/*									*/
+/*   You should have received a copy of the GNU General Public License	*/
+/* along with this program; if not, write to the Free Software		*/
+/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.	*/
+/*                                                                      */
+/* DESCRIPTION								*/
+/*   Once the T11 has accepted an interrupt request, it will execute an	*/
+/* interrupt acknowledge (IACK) cycle. This is the equivalent of a QBUS	*/
+/* IACKI cycle and, on most PDP-11 peripherals, this will clear the	*/
+/* interrupt request flip flop.  This is a critical feature to emulate	*/
+/* because most PDP-11 code assumes this will happen automatically and,	*/
+/* if we don't clear the request, we'll be stuck in an interrupt loop.  */
+/*									*/
+/*  During the IACK cycle the T11 outputs a code for the interrupt	*/
+/* that's being acknowledged and this code is, conveniently, the same	*/
+/* as the code we apply to the CPn inputs to cause the interrupt in the	*/
+/* first place.  This GAL decodes the interrupt acknowledge code and	*/
+/* outputs the appropriate signal to clear the interrupt request. This	*/
+/* works for both SLUs and the LTC.  The PPI and IDE drive don't have	*/
+/* this functionality, and in those cases the software MUST clear the	*/
+/* interrupt before exiting the ISR.  That's OK though, because these	*/
+/* devices are not PDP-11 compatible and there's no existing code that	*/
+/* expects anything different.	     	 	    	     	  	*/
+/*									*/
+/*  BTW, note that the power fail (PF) and the HALT input (HALT switch,	*/
+/* SLU0 break, and NXM trap) don't cause the T11 to output IACK cycles.	*/
+/* These interrupts are effectively edge triggered inside the T11 and	*/
+/* will not recur until the correspoinding signal has been deasserted	*/
+/* and then reasserted.							*/
+/*									*/
+/* REVISION HISTORY							*/
+/* 28-APR-21	RLA	New file.					*/
+/*--									*/
+NAME		ACKNOWLEDGE;
+PARTNO		ACKNOWLEDGE;
+REVISION	A;
+DATE		04/28/21;
+DESIGNER	Robert Armstrong;
+COMPANY		Spare Time Gizmos;
+ASSEMBLY	SBCT11;
+LOCATION	U15;
+DEVICE		G16V8;
+$INCLUDE VECTORS.INC
+
+/* INPUTS... */
+Pin  1 = !IACK;		/* interrupt acknowledge bus cycle		*/
+Pin 11 = !BCLR;		/* bus clear					*/
+Pin  5 = !DAL11_;	/* data bus bit 11				*/
+Pin  4 = !DAL10_;	/*   "   "   "  10				*/
+Pin  3 = !DAL9_;	/*   "   "   "   9				*/
+Pin  2 = !DAL8_;	/*   "   "   "   8				*/
+Pin  6 =  LTC_ENABLE;	/* clock enable signal from FLAGAL		*/
+Pin  7 =  NXM_TRAP;	/* NXM TRAP flip flop output			*/
+Pin  8 =  HALT_SW;	/* HALT button pressed				*/
+Pin  9 =  SLU0_BRKREQ;	/* break detected output from console SLU	*/
+
+/* OUTPUTS... */
+Pin 15 = !CLEAR_LTC;	/* clear clock interrupt request		*/
+Pin 12 = !SPARE_ACK;	/* spare device interrupt acknowledge		*/
+Pin 18 =  SLU0_RCVACK;	/* SLU0 receive interrupt acknowledge		*/
+Pin 16 =  SLU0_XMTACK;	/*  "   transmit  "   "     "    "		*/
+Pin 14 =  SLU1_RCVACK;	/* SLU1 receive   "   "     "    "		*/
+Pin 17 =  SLU1_XMTACK;	/*  "   transmit  "   "     "    "		*/
+Pin 19 = !HALT_REQ;	/* HALT request to DCT11			*/
+Pin 13 =  TEST;		/* test/debugging output			*/
+
+/*   WARNING - if you create a bit field from pin/signal names that end	*/
+/* end in a number (like DAL11..8!) then CUPL will assume that the  	*/
+/* number in the signal name is the same as the bit position.  This is	*/
+/* REGARDLESS of how the actual FIELD definition is written!  So DAL11	*/
+/* will always be bit 11 in the field, no matter what we do.  If you	*/
+/* then compare this field with a constant, you MUST pad the constant	*/
+/* with don't care's so that the bits will line up.  Since the vectors	*/
+/* in VECTOR.INC are defined as 4 bit values for the CP lines, we'll be	*/
+/* screwed if we compare them with a DAL field directly!       	     	*/
+/*									*/
+/*   There are several ways around this, but what I've done is define	*/
+/* the DAL inputs so they don't end with a numeric character, and then	*/
+/* explicitly specify all the bits in the field. This is enough to fake	*/
+/* out CUPL and make it define the field as a 4 bit entity...	   	*/
+/*     	    	     	       	   	      	    			*/
+/*   One more thing - the DAL bits aren't actually active low, but the	*/
+/* CPx inputs ARE, and during the IACK cycle the DCT11 outputs exactly	*/
+/* the same inverted values.  To make the binary code on DAL match the	*/
+/* same vector we supplied to the CPx inputs, we invert the DAL bits.	*/
+/* 	       	  	      	      	      	 	    		*/
+/*  BTW, yes - the order below looks backward, but it matches the order	*/
+/* of the CP bits and the bits in VECTORS.INC! 	      	      	  	*/
+FIELD DAL = [DAL8_, DAL9_, DAL10_, DAL11_];
+
+/*   The clock interrupt is cleared automatically as soon as the DCT11	*/
+/* takes that interrupt vector, which we detect by watching for IACK 	*/
+/* and the clock vector on the DAL bits.  The clock interrupt is also	*/
+/* cleared unconditionally by RESET (BCLR), and it's held off (cleared)	*/
+/* permanently whenever the LTC is not enabled.				*/
+CLEAR_LTC = (IACK & DAL:VEC100) # BCLR # !LTC_ENABLE;
+
+/*   The DLART interrupt acknowledge is a bit weird - the chip wants	*/
+/* external logic to pull its interrupt request output low, overriding	*/
+/* the internal driver on that pin.  Apparently this is not very hard -	*/
+/* the pin can only source about 700uA.  What we do here is to create 	*/
+/* an open drain output using the tristate output driver and then wire	*/
+/* that up to the DLART interrupt request pin.	  	     	  	*/
+SLU0_RCVACK = 'b'0;  SLU0_XMTACK = 'b'0;
+SLU1_RCVACK = 'b'0;  SLU1_XMTACK = 'b'0;
+SLU0_RCVACK.oe = IACK & DAL:VEC060;
+SLU0_XMTACK.oe = IACK & DAL:VEC064;
+SLU1_RCVACK.oe = IACK & DAL:VEC120;
+TEST = IACK & DAL:VEC120;
+SLU1_XMTACK.oe = IACK & DAL:VEC124;
+
+/*   Lastly, the "spare" interrupt acknowledge.  Whether this should	*/
+/* also include BCLR (as does the LTC, for example) is up to you...	*/
+SPARE_ACK = (IACK & DAL:VEC134) # BCLR;
+
+/*  The HALT REQuest output is simply the OR of the three HALT sources,	*/
+/* NXM TRAP, the HALT button, or a break from the console SLU.  This	*/
+/* logic has nothing to do with interrupt acknowledgements, but I stuck	*/
+/* it in here because this PLD had extra inputs and outputs available.	*/
+/* Sorry about that, but it saves us a 74HC27 on the board! 		*/
+HALT_REQ = NXM_TRAP # HALT_SW # SLU0_BRKREQ;

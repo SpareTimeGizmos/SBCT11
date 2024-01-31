@@ -1,0 +1,101 @@
+/*++                                                                    */
+/* system.pld - Spare Time Gizmos SBCT11 System Signal GAL              */
+/*                                                                      */
+/*   Copyright (C) 2021 by Robert Armstrong, Milpitas, California.      */
+/*                                                                      */
+/*  This program is free software; you can redistribute it and/or       */
+/* modify it under the terms of the GNU General Public License as       */
+/* published by the Free Software Foundation; either version 2 of the   */
+/* License, or (at your option) any later version.                      */
+/*                                                                      */
+/*  This program is distributed in the hope that it will be useful, but */
+/* WITHOUT ANY WARRANTY; without even the implied warranty of           */
+/* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU    */
+/* General Public License for more details.                             */
+/*                                                                      */
+/*   You should have received a copy of the GNU General Public License  */
+/* along with this program; if not, write to the Free Software          */
+/* Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111 USA.  */
+/*                                                                      */
+/* DESCRIPTION								*/
+/*   The "system" GAL decodes the basic T11 outputs - R/-WHB, R/-WLB,	*/
+/* SEL0, SEL1, RAS, CAS, etc, and generates the necessary READ, WRITE,	*/
+/* IACK, etc, signals.  It also takes a couple of non-existent memory	*/
+/* (NXM) signals and generates the clock for the NXM TRAP 74HC74 flip	*/
+/* flop.								*/
+/*                                                                      */
+/* REVISION HISTORY                                                     */
+/*  4-MAY-21    RLA     New file.                                       */
+/*--                                                                    */
+NAME            SYSTEM;
+PARTNO          SYSTEM;
+REVISION        A;
+DATE            05/04/21;
+DESIGNER        Robert Armstrong;
+COMPANY         Spare Time Gizmos;
+ASSEMBLY        SBCT11;
+LOCATION        U5;
+DEVICE          G16V8;
+
+/* INPUTS... */
+Pin  6 = !RAS;          /* DCT11 row address strobe                     */
+Pin  2 = !CAS;          /* DCT11 column  "     "                        */
+Pin  4 = R_WHB;         /* DCT11 write high byte                   	*/
+Pin  3 = R_WLB;         /* DCT11   "   low   "                     	*/
+Pin  1 = SEL0;          /* DCT11 transaction type select bit 0          */
+Pin  5 = SEL1;          /* DCT11   "    "     "     "     "  1          */
+Pin  8 = NXM1;		/* non-existent memory trap #1	     		*/
+Pin  9 = NXM2;		/*  "   "   "     "      "  #2			*/
+/* Pins 7, 11 unused */
+
+/* OUTPUTS... */
+Pin 19 = !READ;         /* Intel style memory READ strobe               */
+Pin 18 = !WLB;          /*   "     "     "    WRITE, low byte           */
+Pin 17 = !WHB;          /*   "     "     "    WRITE, high byte          */
+Pin 16 = !WRITE;        /*   "     "     "    WRITE both bytes		*/
+Pin 15 = !IACK;         /* current transaction is interrupt acknowledge */
+Pin 14 =  CLK_NXM;      /* set the NXM TRAP flip flop			*/
+/* Pins 12, 12 unused */
+
+
+/*   In 8 bit mode the T11 gives you separate READ and WRITE strobes,	*/
+/* but in 16 bit mode you really have TWO write strobes and there's NO	*/
+/* read strobe.  In 16 bit mode, read is just defined as the absence of	*/
+/* any write operation.  Sounds good, but that alone is not enough to	*/
+/* gate the output enable pins on memories.  In particular, there's no	*/
+/* write active when the T11 is trying to output an address on the DAL	*/
+/* bus, but if you allow the memories to be enabled then you'll have	*/
+/* contention and garbage. The answer is that READ must ALWAYS be gated	*/
+/* with	RAS, even in delayed controls mode!				*/
+READ = R_WHB & R_WLB & RAS;
+
+/*   If you're using delayed controls in 16 bit mode then I don't think	*/
+/* the write strobes need to be conditioned with RAS.  It looks like 	*/
+/* that's actually what the delayed controls mode does - gate WLB and	*/
+/* WHB with CAS internally to the T11.  But since we don't care about	*/
+/* an extra term in the PLD, it does no hard to gate both of them with	*/
+/* with RAS again and this has the advantage of working in either mode,	*/
+/* normal or delayed controls. 	   	     		   	  	*/
+WLB = !R_WLB & RAS;
+WHB = !R_WHB & RAS;
+
+/*   WRITE is simply a logical OR of WLB and WHB - i.e. it's asserted	*/
+/* for ANY write.  This is used by the IDE and NVR/RTC devices, which	*/
+/* don't support byte write operations.  Attempting to do a byte write	*/
+/* to one of these devices will result in garbage being loaded into the	*/
+/* unselected byte. Byte reads from these devices are no problem, since	*/
+/* reads are always 16 bits and the CPU handles extracting the correct	*/
+/* bits...								*/
+WRITE = (!R_WLB # !R_WHB) & RAS;
+
+/*   IACK is easily decoded from the SEL0/1 state bits, but notice that	*/
+/* even this MUST be gated by RAS... 	    	  	    	   	*/
+IACK = SEL1 & !SEL0 & RAS;
+
+/*   The NXM TRAP flip flop should be set whenever either of the NXM1/2	*/
+/* inputs is asserted.  HOWEVER, we don't want to accidentally set the	*/
+/* NXM TRAP because of some address decoding glitch, so we only assert	*/
+/* the CLK_NXM output during the RAS time - this guarantees that all	*/
+/* address bits will be stable.	     	    	 	    	 	*/
+CLK_NXM = (NXM1 # NXM2) & RAS;
+
