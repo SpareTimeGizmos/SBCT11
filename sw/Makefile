@@ -1,7 +1,7 @@
 #++
-# Makefile - Makefile for the Spare Time Gizmos' SBCT11 EPROM
+# Makefile - Makefile for the Spare Time Gizmos SBCT11 EPROM
 #
-# Copyright (C) 2006 by Spare Time Gizmos.  All rights reserved.
+# Copyright (C) 2024 by Spare Time Gizmos.  All rights reserved.
 #
 # This firmware is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -19,10 +19,11 @@
 #
 #DESCRIPTION:
 #   This Makefile will build the Spare Time Gizmos SBCT11 EPROM image from
-# the PALX source file.  The result is three (yes, three!) files, low.hex,
-# high.hex, and boots11.hex.  low.hex and high.hex are the 16 bit versions
-# for the low byte and high byte 32K EPROMs, respectively.  boots11.hex is the
-# single 64K EPROM version for eight bit systems.
+# the MACRO11 source file.  The result is three (yes, three!) files, LOW.HEX,
+# HIGH.HEX, and BOOTS11.HEX.  LOW.HEX and HIGH.HEX are the 16 bit versions
+# for the low byte and high byte 32K EPROMs, respectively.  BOOTS11.HEX is the
+# single 64K EPROM version for eight bit systems, and in particular the
+# SBCT11 emulator.
 #
 #TARGETS:
 #  make all	- rebuild low.hex, high.hex, boots11.hex
@@ -31,31 +32,34 @@
 # REVISION HISTORY:
 # dd-mmm-yy	who     description
 # 31-Jan-24	RLA	New file.
+# 12-Aug-25	RLA	Add help file.
 #--
 
 # Tool paths and options - you can change these as necessary...
 MACRO=/usr/local/bin/macro11
-MACOPTS=-RT11
-OBJ2ROM=/usr/local/bin/tools/obj2rom
-ROMOPTS=-o000000 -c170000 
+OBJ2ROM=/usr/local/bin/obj2rom
+ROMTEXT=/usr/local/bin/romtext
 DATE=/usr/bin/date
-DTFORMAT="	.ASCIZ	\\%H:%M %d-%^b-%Y\\"
 ECHO=/usr/bin/echo
 RM=/usr/bin/rm
 
 # The default target builds everything...
 all:	low.hex high.hex boots11.hex
 
-boots11.obj:	boots11.asm
-	@$(ECHO) -e "\nAssembling SBCT11 Bootstrap ..."
+boots11.obj:	boots11.asm basic11.dat help.asm
+	@$(ECHO) -e "\n*** BUILDING SBCT11 MONITOR ***"
 	@$(RM) -f sysdat.asm
-	@$(DATE) -r boots11.asm +$(DTFORMAT) >sysdat.asm
-	$(MACRO) $(MACOPTS) $< -l $(@:.obj=.lst) -o $@
+	@$(DATE) -r boots11.asm +"	.ASCIZ	\\%H:%M %d-%^b-%Y\\" >sysdat.asm
+	$(MACRO) -RT11 -DBASIC $< -l $(@:.obj=.lst) -o $@
 
 low.hex high.hex boots11.hex &:	boots11.obj
-	@$(ECHO) -e "\nBuilding EPROM images ..."
-	$(OBJ2ROM) -s32768 $(ROMOPTS) $< low.hex high.hex
-	$(OBJ2ROM) -8 -s65536 $(ROMOPTS) $< boots11.hex
+	@$(ECHO) -e "\n*** Building EPROM images ***"
+	$(OBJ2ROM)    -s32768 -o000000 -c170000 $< low.hex high.hex
+	$(OBJ2ROM) -8 -s65536 -o000000 -c170000 $< boots11.hex
+
+help.asm:	help.txt
+	@$(ECHO) -e "\n*** COMPILING HELP TEXT ***"
+	@$(ROMTEXT) -m help.txt help.asm
 
 
 # The "clean" target does what you'd expect...

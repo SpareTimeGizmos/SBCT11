@@ -1,0 +1,107 @@
+#++
+# help.txt - Help text for the Spare Time Gizmos SBCT11 Firmware
+#
+# Copyright (C) 2021-2025 by Spare Time Gizmos.  All rights reserved.
+#
+# This firmware is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation; either version 2 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+# FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
+# more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc., 59 Temple
+# Place, Suite 330, Boston, MA  02111-1307  USA
+#
+#DESCRIPTION:
+#   This text file is the source for the SBCT11 monitor help that's stored
+# in the EPROM image.  It's what you get when you type the monitor "HELP"
+# command.  This file is converted to a MACRO-11 source file by the MKHELP
+# program and then assembled into the BOOTS11 image.
+#
+# REVISION HISTORY:
+# dd-mmm-yy	who     description
+# 11-AUG-25	RLA	New file
+#--
+MEMORY COMMANDS
+---------------
+E aaaaaa[-bbbbbb]		-> Examine memory in octal and ASCII
+ER Rn|PS|PC|SP			-> Examine register(s)
+EI aaaaaa[-bbbbbb]		-> Disassemble instructions from memory
+D aaaaaa bbbbbb[,cccccc, ...]	-> Deposit data in memory
+DR Rn|PS|PC|SP bbbbbb		-> Deposit data in register
+L[oad]				-> load ABSLDR bin format tape
+
+PROGRAM CONTROL COMMANDS
+------------------------
+GO [aaaaaa]			-> Start user program
+C[ontinue]			-> Continue user program
+ST[ep] [nnnnn]			-> Trace one or more instruction(s)
+RESET				-> Master reset
+
+DISK AND TAPE COMMANDS
+----------------------
+B[oot] [ddu]			-> Boot IDE (DIn) partition or TU58 (DDn) tape
+FOR[mat] ddu [nnnnn]		-> "Format" an IDE partition or TU58
+
+BREAKPOINT COMMANDS
+-------------------
+SE[t] BR[eak] aaaaaa		-> Set breakpoint
+CL[ear] BR[eaks] [aaaaaaa]	-> Remove one or all breakpoint(s)
+SH[ow] BR[eakpoints]		-> List all current breakpoints
+
+SET COMMANDS
+------------
+SE[t] LTC ON|OFF		-> Enable or disable LTC interrupts
+SE[t] NXM ON|OFF		-> Enable or disable bus timeout emulation
+SE[t] TIM[e] hh:mm:ss dd-mmm-yyyy dow -> Set RTC time, date and day of week
+SE[t] BO[ot] ddu|NONE		-> Set or disable automatic boot
+
+SHOW COMMANDS
+-------------
+SH[ow] LTC			-> Show LTC interrupt state
+SH[ow] NXM			-> Show bus timeout trapping state
+SH[ow] VER[sion]		-> Show version of this firmware
+SH[ow] DI[sk]			-> Show attached IDE disk(s)
+SH[ow] BO[ot]			-> Show automatic boot option
+SH[ow] TIM[e]			-> Show current RTC time and date
+SH[ow] NVR			-> dump contents of non-volatile RAM
+
+CLEAR COMMANDS
+--------------
+CL[ear] MEM[ory] [aaaaaa-bbbbbb]-> Clear main memory to zeros 
+CL[ear] NVR			-> Restore factory defaults
+
+TEST COMMANDS
+-------------
+TE[st] MEM[ory]			-> Test main memory
+TE[st] NVR			-> Test non-volatile RAM
+
+MISCELLANEOUS COMMANDS
+----------------------
+REP[eat] [nnnn]; A; B; C; ...	-> Repeat commands A, B, C
+EC[ho] any text ...		-> Echo text to console terminal
+HE[lp]				-> Print this help text
+BAS[ic]				-> Load and start BASIC interpreter
+aa; bb; cc; dd ...		-> Combine multiple commands on one line
+!any text ...			-> Comment text
+
+SPECIAL CHARACTERS
+------------------
+Control-S (XOFF)		-> Suspend terminal output
+Control-Q (XON)			-> Resume terminal output
+Control-O			-> Suppress terminal output
+Control-C			-> Abort current operation
+Control-H (BACKSPACE)		-> Delete the last character entered
+RUBOUT (DELETE)			-> Delete the last character entered
+Control-R			-> Retype the current line
+Control-U			-> Erase current line
+
+DEVICE NAMES
+------------
+DIn				-> IDE disk partition #n
+DDn				-> TU58 drive 0 or 1

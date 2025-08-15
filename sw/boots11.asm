@@ -207,6 +207,11 @@
 ;
 ; 054	-- Add SET/SHOW BOOT and save it to NVR ...
 ;
+; 055	-- Add a real help file ...
+;
+; 056	-- Change $RDNVR and $WRNVR macros to directly access the RTC/NVR
+;          (for rev C PCBs only!).  Do away with RDNVR/WRNVR routines.
+;
 ; SUGGESTIONS
 ; invent CLRINT to clear all interrupts before starting usr program?
 ; make sure console TTY xmt flag is set before starting usr program?  No...
@@ -225,7 +230,7 @@
 ; Change $SAVMAP/$RSTMAP to push and/or pop the MEMCSR
 ;   -> don't need H.PRAM anymore
 ;--
-BTSVER=50.		; revision number of this code
+BTSVER=55.		; revision number of this code
 	.SBTTL	Subroutine Dictionary
 
 ; CONSOLE OUTPUT FUNCTIONS
@@ -759,32 +764,33 @@ NV.CHK= RTC.SZ-2	; NVR checksum
 
 
 ;++
-;   The $RDNVR and $WRNVR macros read and write single bytes from or to the NVR.
-; Because of a layout error in the revision B PCBs these actually call a
-; subroutine to do the job, but in the next revision it should be possible to
-; do this directly inline.
+;   These macros will read or write a single byte from or to the DS12887A
+; NVR/RTC chip.  This chip is basically 128 bytes of battery backed up SRAM,
+; and the first 14 bytes implement a clock/calendar that keeps track of the
+; time of day, even when the power is off. 
+;
+;   Remember, to access the DS12887 we first write the address of the register
+; we want to the RTCAS location, and then we can read or write the contents
+; of that register by accessing the RTCRD or RTCWR locations.  In revision C
+; and later PCBs this works exactly as you would expect, rememembering that
+; the DS12887A is only a byte wide device.  Writing the odd byte is ignored
+; and reading it produces undefined results.
+;
+;   Remember that when using MOVB with a register as the destination, the
+; byte is sign extended.  Gotta be careful about that, and you should probably
+; be using byte instructions (e.g. CMPB, TSTB, etc) to access the result!
 ;--
 
 ; Read a byte from NVR ...
 	.MACRO	$RDNVR	ADDR, DATA
-	.IF	DIF	ADDR, R2
-	MOV	ADDR, R2
-	.ENDC
-	CALL	RDNVRB
-	.IF	DIF	DATA, R1
-	MOVB	R1, DATA
-	.ENDC
+	MOVB	ADDR, @#RTCAS
+	MOVB	@#RTCRD, DATA
 	.ENDM
 
 ; Write a byte to NVR ...
 	.MACRO	$WRNVR	DATA, ADDR
-	.IF	DIF	ADDR, R2
-	MOV	ADDR, R2
-	.ENDC
-	.IF	DIF	DATA, R1
-	MOVB	DATA, R1
-	.ENDC
-	CALL	WRNVRB
+	MOVB	ADDR, @#RTCAS
+	MOVB	DATA, @#RTCWR
 	.ENDM
 
 ;   This routine "idles" NVR.  In reality the hardware doesn't need us to do
@@ -795,7 +801,7 @@ NV.CHK= RTC.SZ-2	; NVR checksum
 ; with a read only address - RTC.D is a good choice.  Then if some errant code
 ; accidentally writes to the NVR, nothing will happen.
 	.MACRO	$NONVR
-	MOV	#<RTC.D*2>, @#RTCAS
+	MOVB	#RTC.D, @#RTCAS
 	.ENDM
 	.SBTTL	IDE Definitions
 
@@ -1668,11 +1674,11 @@ IDETST:	MOV	#99$, @#IDEVEC	; point to a dead end vector
 RTCTST:	$RDNVR	#RTC.RM, R3	; first try to read the first NVR location
 	$WRNVR	#125, #RTC.RM	; try to write a test value to that location
 	$RDNVR	#RTC.RM, R1	; re-read the same location
-	CMP	#125, R1	; did it work?
+	CMPB	#125, R1	; did it work?
 	BNE	10$		; branch if no chip
 	$WRNVR	#252, #RTC.RM	; now try to write a different pattern
 	$RDNVR	#RTC.RM, R1	; ...
-	CMP	#252, R1	; did that work too?
+	CMPB	#252, R1	; did that work too?
 	BNE	10$		; nope ...
 	$WRNVR	R3, #RTC.RM	; finally restore the original contents
 	$RDNVR	#RTC.RM, R1	; ...
@@ -1683,7 +1689,7 @@ RTCTST:	$RDNVR	#RTC.RM, R3	; first try to read the first NVR location
 ; Here if the DS12887 is present - check the battery status ...
 20$:	BIS	#H.RTCC, HFLAGS	; remember that the DS12887 was found
 	$RDNVR	#RTC.D, R1	; read register D
-	CMP	#RT.VRT, R1	; the battery OK bit should be set
+	CMPB	#RT.VRT, R1	; the battery OK bit should be set
 	BNE	.		; nope - DS12887 dead battery ...
 
 ; Now see if the clock is ticking ...
@@ -1875,7 +1881,7 @@ DOEXAM:	CALL	SPANW		; skip any white space
 10$:	CALL	ISOCT		; is the next character an octal digit?
 	BCS	EMEM		; yes - examine memory address or range
 	MOV	R5, R3		; save the command pointer so we can back up
-	MOV	#INSKEY, R4	; try to match the INSTRUCTIOKN keyword
+	MOV	#INSKEY, R4	; try to match the INSTRUCTION keyword
 	CALL	MATCH		; ...
 	BNE	20$		; no - try for something else
 	JMP	EINST		; yes - EXAMINE INSTRUCTION
@@ -5006,20 +5012,20 @@ OPTYPE:	$CODES
 ; since the name table is searched with a simple linear search.
 ;--
 	.MACRO	$COMMANDS
-	$CMD	REP*EAT, REPEAT		; REPeat - repeat a command line
-	$CMD	EC*HO, ECHO		; ECho - echo command line text
+	$CMD	REP*EAT, REPEAT	; REPeat - repeat a command line
+	$CMD	EC*HO, ECHO	; ECho - echo command line text
 
-	$CMD	E*XAMINE, DOEXAM	; Examine  - generic examing command
-	$CMD	ER, EREG		; ER - examine register
-	$CMD	EI, EINST		; EI - examine instruction (disassemble)
+	$CMD	E*XAMINE, DOEXAM; Examine  - generic examing command
+	$CMD	ER, EREG	; ER - examine register
+	$CMD	EI, EINST	; EI - examine instruction (disassemble)
 
-	$CMD	D*EPOSIT, DODEPO	; Deposit  - generic deposit command
-	$CMD	DR, DREG		; DR - deposit in register
+	$CMD	D*EPOSIT, DODEPO; Deposit  - generic deposit command
+	$CMD	DR, DREG	; DR - deposit in register
 
 	$CMD	GO, GOCMD	; GO - start user program running
-	$CMD	ST*EP, TRACE	; TR - trace user instructions
-	$CMD	C*ONTINUE, CONT	; C  - continue user program (past breakpoint)
-	$CMD	RESET, MRESET	; MR - master reset
+	$CMD	ST*EP, TRACE	; STep - trace user instructions
+	$CMD	C*ONTINUE, CONT	; Continue  - continue user program (past breakpoint)
+	$CMD	RESET, MRESET	; RESET - master reset
 
 	$CMD	SH*OW, SHOCMD
 	$CMD	SE*T, SETCMD
@@ -5158,57 +5164,14 @@ HLTMSG:	.ASCIZ	/HALT/
 ;   This is the entire help "file" for this monitor, in plain ASCII text.
 ; Why plain ASCII?  Why not?  There's lots of EPROM space!
 ;--
-HLPTXT:
-	.ASCII	/EXAMINE AND DEPOSIT COMMANDS/<15><12>
-	.ASCII	/E  aaaaaa[-bbbbbb]		-> Examine memory in octal and ASCII/<15><12>
-	.ASCII	/EI aaaaaa[-bbbbbb]		-> Disassemble instructions from memory/<15><12>
-	.ASCII	/ER [rr]				-> Examine register/<15><12>
-	.ASCII	/D  aaaaaa bbbbbb[,cccccc, ...]	-> Deposit data in memory/<15><12>
-	.ASCII	/DR rr yyyyyy			-> Deposit data in a register/<15><12>
-	.ASCII	<15><12>
-
-	.ASCII	/BREAKPOINT COMMANDS/<15><12>
-	.ASCII	/BP aaaaaa			-> Set breakpoint/<15><12>
-	.ASCII	/BR [aaaaaaa]			-> Remove breakpoint/<15><12>
-	.ASCII	/BL				-> List breakpoints/<15><12>
-	.ASCII	<15><12>
-
-	.ASCII	/PROGRAM CONTROL COMMANDS/<15><12>
-	.ASCII	/ST [aaaaaa]			-> Start user program/<15><12>
-	.ASCII	/C				-> Continue user program/<15><12>
-	.ASCII	/TR [nnnn]			-> Trace one or more instruction(s)/<15><12>
-	.ASCII	/MR				-> Master reset/<15><12>
-	.ASCII	<15><12>
-
-	.ASCII	/DISK AND TAPE COMMANDS/<15><12>
-	.ASCII	/B [dd]				-> Boot IDE or TU58/<15><12>
-	.ASCII	<15><12>
-
-	.ASCII	/MISCELLANEOUS COMMANDS/<15><12>
-	.ASCII	/VE				-> Show firmware version/<15><12>
-	.ASCII	/aa; bb; cc; dd ...		-> Combine multiple commands/<15><12>
-	.ASCII	/RP [nnnn]; A; B; C; ...		-> Repeat commands A, B, C/<15><12>
-	.ASCII	/!any text...			-> Comment text/<15><12>
-	.ASCII	<15><12>
-
-	.ASCII	/SPECIAL CHARACTERS/<15><12>
-	.ASCII	/Control-S (XOFF)		-> Suspend terminal output/<15><12>
-	.ASCII	/Control-Q (XON)			-> Resume terminal output/<15><12>
-	.ASCII	/Control-O			-> Suppress terminal output/<15><12>
-	.ASCII	/Control-C			-> Abort current operation/<15><12>
-	.ASCII	/Control-H (Backspace)		-> Delete the last character entered/<15><12>
-	.ASCII	/RUBOUT (Delete)			-> Delete the last character entered/<15><12>
-	.ASCII	/Control-R			-> Retype the current line/<15><12>
-	.ASCII	/Control-U			-> Erase current line/<15><12>
-	.ASCII	<15><12>
-
-	.BYTE	0
-	.EVEN
+HLPTXT:	.include \help.asm\
 	.SBTTL	BASIC-11
 
 	.IF	DF BASIC
 BASTAP:	.include \basic11.dat\
 	.ENDC
+
+CEND=. 
 	.SBTTL	ROM Checksum and Entry Vectors
 
 ;++
@@ -6065,54 +6028,6 @@ SETLBA:	MOVB	#1, @#IDESCT	; always set the sector count to 1
 	BIS	#ID.LBA, R1	; set the LBA mode bit
 	MOVB	R1, @#IDELB3	; and set that
 	RETURN			; ready to go!
-	.SBTTL	Read and Write NVR/RTC Bytes
-
-;++
-;   These routines will read or write a single byte from or to the DS12887A
-; NVR/RTC chip.  This chip is basically 128 bytes of battery backed up SRAM,
-; and the first 14 bytes implement a clock/calendar that keeps track of the
-; time of day, even when the power is off. 
-;
-;   Remember, to access the DS12887 we first write the address of the register
-; we want to the RTCAS location, and then we can read or write the contents
-; of that register by accessing the RTCRD or RTCWR locations.  This would be
-; trivial except that the SBCT11 revision B PC boards have a layout error that
-; requires us to shift one bit to the right or left and do some masking.
-;--
-
-;++
-; Read and return a byte from NVR/RTC ...
-;
-;	<NVR address, 0..127, in R2>
-;	CALL	RDNVRB
-;	<return NVR byte in R1>
-;--
-RDNVRB:	$PUSH	R2		; save the originel address
-	ASL	R2		; shift the address left one bit
-	BIC	#^C376, R2	; clear out any extra bits
-	MOV	R2, @#RTCAS	; load the DS12887 address register
-	MOV	@#RTCRD, R1	; read a byte from the DS12887A
-	ASR	R1		; right justify it
-	BIC	#^C377, R1	; and clear any extra bits
-	$POP	R2		; restore the address
-	RETURN			; and we're done
-
-
-;++
-; Write one byte to NVR/RTC ...
-;
-;	<NVR address, 0..127, in R2>
-;	<byte to be written in R1>
-;	CALL	WRNVRB
-;--
-WRNVRB:	$PUSH	<R2,R1>		; save the original address and data
-	ASL	R2		; gotta shift the address left for the B PCB
-	BIC	#^C376, R2	; clear out any extra bits
-	MOV	R2, @#RTCAS	; load the DS12887 address register
-	ASL	R1		; left justify the data too
-	MOV	R1, @#RTCWR	; store these bits in the NVR
-	$POP	<R1,R2>		; restore the original register contents
-	RETURN			; and we're done
 	.SBTTL	Secondary Startup Vectors
 
 ;++
