@@ -54,7 +54,7 @@
 /*									*/
 /*   The 82C55 programmable parallel interface (aka PPI) mostly needs	*/
 /* only a chip select signal, and that's decoded by IOGAL#1.  This GAL	*/
-/* helps be generating a PPI RD signal which is active only when LAL3	*/
+/* helps by generating a PPI RD signal which is active only when LAL3	*/
 /* is NOT asserted.  This creates separate R/W and write only address	*/
 /* spaces for the PPI -							*/
 /*									*/
@@ -78,11 +78,12 @@
 /* REVISION HISTORY                                                     */
 /* 28-APR-21    RLA     New file.                                       */
 /* 31-MAY-21	RLA	Add DS12887 RTC/NVR				*/
+/* 15-AUG-25    RLA     CS_RTC should be on in 5, not 4!		*/
 /*--                                                                    */
 NAME            IO2;
 PARTNO          IO2;
-REVISION        B;
-DATE            05/31/21;
+REVISION        C;
+DATE            08/15/25;
 DESIGNER        Robert Armstrong;
 COMPANY         Spare Time Gizmos;
 ASSEMBLY        SBCT11;
@@ -94,12 +95,12 @@ Pin  2 = !WHB;		/* high byte write strobe			*/
 Pin  1 = !WLB;		/* low   "     "      "				*/
 Pin 11 = !READ;		/* memory read strobe				*/
 Pin  3 = !CS_IDE;	/* the IDE/ATA drive is selected		*/
-Pin  4 = !CS_RTC;	/* DS12887 NVR/RTC is selected			*/
+Pin  5 = !CS_RTC;	/* DS12887 NVR/RTC is selected			*/
 Pin  6 = LAL5;		/* latched address bit #5			*/
 Pin  7 = LAL3;		/*    "       "     "  #3			*/
 Pin  8 = LAL2;		/*    "       "     "  #2			*/
 Pin  9 = LAL1;		/*    "       "     "  #1			*/
-/* Pin 5 unused */
+/* Pin 4 unused */
 
 /* OUTPUTS... */
 Pin 19 = !IDE_ENABLE;	/* enable the IDE bus buffers			*/
@@ -121,6 +122,10 @@ IDE_WR = CS_IDE & (WHB # WLB);
 PPI_RD = READ & !LAL3;
 
 /* DS12887 decoding ... */
-RTC_OE = CS_RTC & !LAL2 & !LAL1 &  READ;
-RTC_WR = CS_RTC & !LAL2 &  LAL1 & (WHB # WLB);
-RTC_AS = CS_RTC &  LAL2 &  LAL1 & (WHB # WLB);
+/*   Remember that the DS12887 is a byte wide device, so it responds	*/
+/* only when the LOW (even address) byte is written.  Writing to the	*/
+/* high (odd) byte is ignored.  Likewise, reading the high (odd) byte	*/
+/* will produce undefined results!	  	      	   	 	*/
+RTC_OE = CS_RTC & !LAL2 & !LAL1 & READ;
+RTC_WR = CS_RTC & !LAL2 &  LAL1 & WLB;
+RTC_AS = CS_RTC &  LAL2 &  LAL1 & WLB;
