@@ -44,11 +44,12 @@
 /*									*/
 /* REVISION HISTORY							*/
 /* 28-APR-21	RLA	New file.					*/
+/* 15-AUG-25	RLA	Remove TEST debugging logic			*/
 /*--									*/
 NAME		ACKNOWLEDGE;
 PARTNO		ACKNOWLEDGE;
-REVISION	A;
-DATE		04/28/21;
+REVISION	B;
+DATE		08/15/25;
 DESIGNER	Robert Armstrong;
 COMPANY		Spare Time Gizmos;
 ASSEMBLY	SBCT11;
@@ -76,7 +77,7 @@ Pin 16 =  SLU0_XMTACK;	/*  "   transmit  "   "     "    "		*/
 Pin 14 =  SLU1_RCVACK;	/* SLU1 receive   "   "     "    "		*/
 Pin 17 =  SLU1_XMTACK;	/*  "   transmit  "   "     "    "		*/
 Pin 19 = !HALT_REQ;	/* HALT request to DCT11			*/
-Pin 13 =  TEST;		/* test/debugging output			*/
+/* Pin 13 unused */
 
 /*   WARNING - if you create a bit field from pin/signal names that end	*/
 /* end in a number (like DAL11..8!) then CUPL will assume that the  	*/
@@ -120,7 +121,6 @@ SLU1_RCVACK = 'b'0;  SLU1_XMTACK = 'b'0;
 SLU0_RCVACK.oe = IACK & DAL:VEC060;
 SLU0_XMTACK.oe = IACK & DAL:VEC064;
 SLU1_RCVACK.oe = IACK & DAL:VEC120;
-TEST = IACK & DAL:VEC120;
 SLU1_XMTACK.oe = IACK & DAL:VEC124;
 
 /*   Lastly, the "spare" interrupt acknowledge.  Whether this should	*/

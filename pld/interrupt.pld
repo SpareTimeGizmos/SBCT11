@@ -46,11 +46,12 @@
 /*									*/
 /* REVISION HISTORY							*/
 /* 28-APR-21	RLA	New file.					*/
+/* 15-AUG-25	RLA	Clean up vector logic.  Add MIN CP = 4.		*/
 /*--									*/
 NAME		INTERRUPT;
 PARTNO		INTERRUPT;
-REVISION	A;
-DATE		04/28/21;
+REVISION	B;
+DATE		08/15/25;
 DESIGNER	Robert Armstrong;
 COMPANY		Spare Time Gizmos;
 ASSEMBLY	SBCT11;
@@ -85,7 +86,7 @@ Pin 12 = !ASPI_OUT;	/* inverted ASPI signal for HALT/PF driver	*/
 /* enable the CP outputs when ASPI is asserted.				*/
 FIELD CP = [CP3..0];
 CP.oe = ASPI;
-/*MIN CP = 4;*/
+MIN CP = 4;
 
 /*   This field determines the order of the request inputs for the 	*/
 /* priority encoder below.  In theory the order is arbitrary, but it's	*/
@@ -103,46 +104,25 @@ FIELD IRQs = [
 /*   This table translates the highest priority input into the matching	*/
 /* CP outputs for the DCT11.  These CP outputs determine the vector	*/
 /* that will ultimately be taken ...					*/
-/*TABLE IRQs => CP {*/
-/*  'b'1xxxxxxx => VEC100;*/	/* line time clock			*/
-/*  'b'01xxxxxx => VEC120;*/	/* SLU1 (TU58) receive			*/
-/*  'b'001xxxxx => VEC124;*/	/* SLU1 (TU58) transmit			*/
-/*  'b'0001xxxx => VEC130;*/	/* parallel interface (8255 PPI)	*/
-/*  'b'00001xxx => VEC134;*/	/* spare interrupt			*/
-/*  'b'000001xx => VEC060;*/	/* SLU0 (console) receive		*/
-/*  'b'0000001x => VEC064;*/	/* SLU0 (console) transmit		*/
-/*  'b'00000001 => VEC070;*/	/* IDE/ATA disk drive			*/
-/*  'b'00000000 => VECNONE;*/	/* no interrupt				*/
-/*}*/
-
-CP0 =  LTC_IRQ
-    # !LTC_IRQ &  SLU1_RCVIRQ
-    # !LTC_IRQ & !SLU1_RCVIRQ & !SLU1_XMTIRQ &  PPI_IRQ
-    # !LTC_IRQ & !SLU1_RCVIRQ & !SLU1_XMTIRQ & !PPI_IRQ &  SLU0_RCVIRQ
-    # !LTC_IRQ & !SLU1_RCVIRQ & !SLU1_XMTIRQ & !PPI_IRQ & !SLU0_RCVIRQ & !SLU0_XMTIRQ & IDE_IRQ;
-
-CP1 =  LTC_IRQ
-    # !LTC_IRQ &  SLU1_RCVIRQ
-    # !LTC_IRQ & !SLU1_RCVIRQ &  SLU1_XMTIRQ 
-    # !LTC_IRQ & !SLU1_RCVIRQ & !SLU1_XMTIRQ & !PPI_IRQ &  SLU0_RCVIRQ
-    # !LTC_IRQ & !SLU1_RCVIRQ & !SLU1_XMTIRQ & !PPI_IRQ & !SLU0_RCVIRQ &  SLU0_XMTIRQ;
-
-CP2 = !LTC_IRQ &  SLU1_RCVIRQ 
-    # !LTC_IRQ & !SLU1_RCVIRQ &  SLU1_XMTIRQ
-    # !LTC_IRQ & !SLU1_RCVIRQ & !SLU1_XMTIRQ &  PPI_IRQ;
-
-CP3 = LTC_IRQ;
+TABLE IRQs => CP {
+  'b'1xxxxxxx => VEC100;	/* line time clock			*/
+  'b'01xxxxxx => VEC120;	/* SLU1 (TU58) receive			*/
+  'b'001xxxxx => VEC124;	/* SLU1 (TU58) transmit			*/
+  'b'0001xxxx => VEC130;	/* parallel interface (8255 PPI)	*/
+  'b'00001xxx => VEC134;	/* spare interrupt			*/
+  'b'000001xx => VEC060;	/* SLU0 (console) receive		*/
+  'b'0000001x => VEC064;	/* SLU0 (console) transmit		*/
+  'b'00000001 => VEC070;	/* IDE/ATA disk drive			*/
+  'b'00000000 => VECNONE;	/* no interrupt				*/
+}
 
 /*   The IRQ_LED output is used to drive a single "interrupt requested"	*/
 /* LED.  It's asserted whenever any interrupt request is active, except	*/
 /* HALT and PF of course.	    	      	      	 	 	*/
-/*IRQ_LED = !(IRQs:'b'00000000);*/
-LED2 = SLU1_RCVIRQ # SLU1_XMTIRQ # SLU0_RCVIRQ # SLU0_XMTIRQ;
-IRQ_LED = LTC_IRQ # PPI_IRQ # IDE_IRQ # SPARE_IRQ # LED2;
+IRQ_LED = !(IRQs:'b'00000000);
 
 /*   ASPI_OUT is just an inverted copy of ASPI and it's used to enable	*/
 /* the 74HC367 buffers for the HALT and PF inputs to the DCT11. And BTW	*/
 /* the actual inversion is handled by couple because of the active low	*/
 /* pin definition for ASPI_OUT!						*/
-/*ASPI_OUT = ASPI;*/
-ASPI_OUT = 'b'0;
+ASPI_OUT = ASPI;
